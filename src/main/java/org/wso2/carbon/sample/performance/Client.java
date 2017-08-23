@@ -23,6 +23,7 @@ import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.databridge.agent.AgentHolder;
 import org.wso2.carbon.databridge.agent.DataPublisher;
 import org.wso2.carbon.databridge.commons.Event;
+import org.wso2.carbon.sample.performance.feedbackServer.TCPServer;
 
 import java.text.DecimalFormat;
 import java.util.Arrays;
@@ -32,40 +33,50 @@ public class Client {
     private static Log log = LogFactory.getLog(Client.class);
 
     public static void main(String[] args) {
-        log.info(Arrays.deepToString(args));
-        try {
-            log.info("Starting WSO2 Performance Test Client");
+//      Run the feedback sever
+        TCPServer tcpServer = new TCPServer(6789);
+        tcpServer.startServer();
 
-            AgentHolder.setConfigPath(DataPublisherUtil.getDataAgentConfigPath());
-            DataPublisherUtil.setTrustStoreParams();
+//      Run event publish client
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                log.info(Arrays.deepToString(args));
+                try {
+                    log.info("Starting WSO2 Performance Test Client");
 
-            String protocol = args[0];
-            String host = args[1];
-            String port = args[2];
-            String username = args[3];
-            String password = args[4];
-            String eventCount = args[5];
-            String elapsedCount = args[6];
-            String warmUpCount = args[7];
-            String calcType = args[8];
+                    AgentHolder.setConfigPath(DataPublisherUtil.getDataAgentConfigPath());
+                    DataPublisherUtil.setTrustStoreParams();
 
-            //create data publisher
-            DataPublisher dataPublisher = new DataPublisher(protocol, "tcp://" + host + ":" + port, null, username,
-                    password);
+                    String protocol = args[0];
+                    String host = args[1];
+                    String port = args[2];
+                    String username = args[3];
+                    String password = args[4];
+                    String eventCount = args[5];
+                    String elapsedCount = args[6];
+                    String warmUpCount = args[7];
+                    String calcType = args[8];
 
-            //Publish event for a valid stream
-            if ("latency".equalsIgnoreCase(calcType)) {
-                publishEventsForLatency(dataPublisher, Long.parseLong(eventCount), Long.parseLong(elapsedCount),
-                        Long.parseLong(warmUpCount));
-            } else {
-                publishEvents(dataPublisher, Long.parseLong(eventCount), Long.parseLong(elapsedCount),
-                        Long.parseLong(warmUpCount));
+                    //create data publisher
+                    DataPublisher dataPublisher = new DataPublisher(protocol, "tcp://" + host + ":" + port, null, username,
+                            password);
+
+                    //Publish event for a valid stream
+                    if ("latency".equalsIgnoreCase(calcType)) {
+                        publishEventsForLatency(dataPublisher, Long.parseLong(eventCount), Long.parseLong(elapsedCount),
+                                Long.parseLong(warmUpCount));
+                    } else {
+                        publishEvents(dataPublisher, Long.parseLong(eventCount), Long.parseLong(elapsedCount),
+                                Long.parseLong(warmUpCount));
+                    }
+
+                    dataPublisher.shutdownWithAgent();
+                } catch (Throwable e) {
+                    log.error(e);
+                }
             }
-
-            dataPublisher.shutdownWithAgent();
-        } catch (Throwable e) {
-            log.error(e);
-        }
+        }).start();
     }
 
     private static void publishEvents(DataPublisher dataPublisher, long eventCount, long elapsedCount,

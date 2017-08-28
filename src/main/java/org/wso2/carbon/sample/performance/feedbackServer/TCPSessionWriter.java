@@ -27,7 +27,7 @@ public class TCPSessionWriter extends Thread {
 
             clientSentence = inFromClient.readLine();
             System.out.println("Received: " + clientSentence);
-
+            FeedbackProcessor.getInstance().handleFeedback(clientSentence);
 
 //          String capitalizedSentence = clientSentence.toUpperCase() + '\n';
 //          outToClient.writeBytes(capitalizedSentence);
@@ -35,4 +35,6 @@ public class TCPSessionWriter extends Thread {
             e.printStackTrace();
         }
     }
+
+
 }

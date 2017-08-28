@@ -24,6 +24,7 @@ import org.wso2.carbon.databridge.agent.AgentHolder;
 import org.wso2.carbon.databridge.agent.DataPublisher;
 import org.wso2.carbon.databridge.commons.Event;
 import org.wso2.carbon.sample.performance.feedbackServer.TCPServer;
+import org.wso2.carbon.sample.performance.feedbackServer.FeedbackProcessor;
 
 import java.text.DecimalFormat;
 import java.util.Arrays;
@@ -113,6 +114,7 @@ public class Client {
                                 + " events per second.");
                     }
 
+                    FeedbackProcessor.getInstance().incrementTotalEvents();
                     counter++;
                     try {
                         Thread.sleep(1);

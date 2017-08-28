@@ -14,9 +14,9 @@ public class TCPServer extends Thread{
     @Override
     public void run() {
         try {
+            System.out.println("FEEDBACK SERVER started................");
             ServerSocket welcomeSocket = new ServerSocket(TCPServer.this.port);
             while (true) {
-                System.out.println("FEEDBACK SERVER started................");
                 connectionSocket = welcomeSocket.accept();
                 new TCPSessionWriter(connectionSocket).start();
             }

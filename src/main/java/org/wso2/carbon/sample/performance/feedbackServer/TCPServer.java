@@ -3,40 +3,23 @@ package org.wso2.carbon.sample.performance.feedbackServer;
 import java.io.*;
 import java.net.*;
 
-public class TCPServer {
-
+public class TCPServer extends Thread{
+    private Socket connectionSocket;
     private int port;
 
     public TCPServer(int port) {
         this.port = port;
     }
 
-
-    public void startServer() {
+    @Override
+    public void run() {
         try {
-            ServerSocket welcomeSocket = new ServerSocket(this.port);
-
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    while (true) {
-                        try {
-                            Socket connectionSocket = null;
-                            connectionSocket = welcomeSocket.accept();
-                            BufferedReader inFromClient =
-                                    new BufferedReader(new InputStreamReader(connectionSocket.getInputStream()));
-                            DataOutputStream outToClient = new DataOutputStream(connectionSocket.getOutputStream());
-                            String clientSentence = inFromClient.readLine();
-                            System.out.println("Received: " + clientSentence);
-                            String capitalizedSentence = clientSentence.toUpperCase() + '\n';
-                            outToClient.writeBytes(capitalizedSentence);
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                }
-            }).start();
-
+            ServerSocket welcomeSocket = new ServerSocket(TCPServer.this.port);
+            while (true) {
+                System.out.println("FEEDBACK SERVER started................");
+                connectionSocket = welcomeSocket.accept();
+                new TCPSessionWriter(connectionSocket).start();
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }

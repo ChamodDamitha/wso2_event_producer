@@ -25,12 +25,16 @@ import org.wso2.carbon.databridge.agent.DataPublisher;
 import org.wso2.carbon.databridge.commons.Event;
 import org.wso2.carbon.sample.performance.feedbackServer.TCPServer;
 import org.wso2.carbon.sample.performance.feedbackServer.FeedbackProcessor;
+import org.wso2.carbon.sample.performance.feedbackServer.StreamSampler;
 
+import java.awt.*;
 import java.text.DecimalFormat;
 import java.util.Arrays;
 import java.util.Random;
 
 public class Client {
+    static StreamSampler streamSampler = new StreamSampler(0.9);
+
     private static Log log = LogFactory.getLog(Client.class);
 
     public static void main(String[] args) {
@@ -83,11 +87,11 @@ public class Client {
             @Override
             public void run() {
                 long counter = 0;
-                Random randomGenerator = new Random();
+                Random randomGenerator = new Random(1233435);
                 String streamId = "org.wso2.event.sensor.stream:1.0.0";
                 long lastTime = System.currentTimeMillis();
                 DecimalFormat decimalFormat = new DecimalFormat("#");
-
+                int filteredEvents = 0;
                 while (counter < eventCount) {
                     boolean isPowerSaveEnabled = randomGenerator.nextBoolean();
                     int sensorId = randomGenerator.nextInt();
@@ -100,8 +104,11 @@ public class Client {
                                     "temperature-" + counter},
                             new Object[]{longitude, latitude},
                             new Object[]{humidity, sensorValue});
-
-                    dataPublisher.tryPublish(event);
+//                  Stream sampling
+//                    if (streamSampler.isAddable(counter)) {
+                        dataPublisher.tryPublish(event);
+                        filteredEvents++;
+//                    }
 
                     if ((counter > warmUpCount) && ((counter + 1) % elapsedCount == 0)) {
 
@@ -122,6 +129,10 @@ public class Client {
 
                     }
                 }
+
+                System.out.println("EVENT SENDING FINISHED.................");
+                System.out.println("TOTAL NO OF EVENTS : " + eventCount);
+                System.out.println("FILTERED NO OF EVENTS : " + filteredEvents);
 
                 try {
                     dataPublisher.shutdownWithAgent();

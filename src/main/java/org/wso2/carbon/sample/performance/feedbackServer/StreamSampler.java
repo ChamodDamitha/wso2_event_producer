@@ -18,12 +18,29 @@ package org.wso2.carbon.sample.performance.feedbackServer;/*
 
 import java.util.ArrayList;
 
+/**
+ * Used to sample a set of data depending on a specified accuracy
+ *
+ * @param <T>
+ */
 public class StreamSampler<T> {
     private int totalNoOfHashValues = 1000;
     private int acceptedNoOfHashValues;
     private double accuracy;
+
     private ArrayList<T> events;
 
+    private int totalCount;
+    private int[] counts;
+
+
+    /**
+     * Based on a specified accuracy and a precision of accuracy, an StreamSampler object is created
+     *
+     * @param accuracy            is a double value in the range [0,1]
+     * @param precisionOfAccuracy is a integer value specifying the number of decimal
+     *                            places of the accuracy(precision) to be considered
+     */
     public StreamSampler(double accuracy, int precisionOfAccuracy) {
         int temp = 1;
         for (int i = 0; i < precisionOfAccuracy; i++) {
@@ -33,12 +50,18 @@ public class StreamSampler<T> {
         init(accuracy);
     }
 
+    /**
+     * Based on a specified accuracy, an StreamSampler object is created.
+     * The default precision of the accuracy is taken for 3 decimal places.
+     *
+     * @param accuracy is a double value in the range [0,1]
+     */
     public StreamSampler(double accuracy) {
         init(accuracy);
     }
 
     private void init(double accuracy) {
-        if (accuracy >= 1 || accuracy <= 0) {
+        if (accuracy > 1 || accuracy < 0) {
             throw new IllegalArgumentException("accuracy must be in the range of (0,1)");
         }
         this.accuracy = accuracy;
@@ -57,8 +80,17 @@ public class StreamSampler<T> {
         System.out.println("totalNoOfHashValues : " + totalNoOfHashValues);
         System.out.println("acceptedNoOfHashValues : " + acceptedNoOfHashValues);
         events = new ArrayList<T>();
+
+        totalCount = 0;
+        counts = new int[totalNoOfHashValues];
     }
 
+    /**
+     * Add the given object to a list if it is not dropped.
+     *
+     * @param t is the object
+     * @return {@code true} if the object is added to the list, {@code false} if the object is dropped from the list.
+     */
     public boolean add(T t) {
         if (isAddable(t)) {
             events.add(t);
@@ -67,15 +99,25 @@ public class StreamSampler<T> {
         return false;
     }
 
+    /**
+     * Calculate whether a given {@code t} object can be passed through the sampling filter or not.
+     *
+     * @param t is the object
+     * @return {@code true} if the object is included in the samples, {@code false} if the object is dropped from samples.
+     */
     public boolean isAddable(T t) {
-        if (getHashValue(t) <= acceptedNoOfHashValues) {
+        int hash = getHashValue(t);
+        counts[hash]++;
+        totalCount++;
+
+        if (hash <= acceptedNoOfHashValues) {
             return true;
         }
         return false;
     }
 
     private int getHashValue(T t) {
-        int hash = MurmurHash.hash(t);
+        int hash = Math.abs(MurmurHash.hash(t));
         return hash % totalNoOfHashValues;
     }
 
@@ -85,5 +127,13 @@ public class StreamSampler<T> {
 
     public ArrayList<T> getEvents() {
         return events;
+    }
+
+    public int[] getCounts() {
+        return counts;
+    }
+
+    public int getTotalCount() {
+        return totalCount;
     }
 }

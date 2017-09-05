@@ -31,9 +31,10 @@ import java.awt.*;
 import java.text.DecimalFormat;
 import java.util.Arrays;
 import java.util.Random;
+import java.util.concurrent.BlockingDeque;
 
 public class Client {
-    static StreamSampler streamSampler = new StreamSampler(0.9);
+    static StreamSampler streamSampler = new StreamSampler(0.7);
 
     private static Log log = LogFactory.getLog(Client.class);
 
@@ -83,9 +84,13 @@ public class Client {
 
     private static void publishEvents(DataPublisher dataPublisher, long eventCount, long elapsedCount,
                                       long warmUpCount) {
+
         new Thread(new Runnable() {
             @Override
             public void run() {
+                boolean dropped = false;
+                long totalDropped = 0;
+
                 long counter = 0;
                 Random randomGenerator = new Random(1233435);
                 String streamId = "org.wso2.event.sensor.stream:1.0.0";
@@ -105,10 +110,17 @@ public class Client {
                             new Object[]{longitude, latitude},
                             new Object[]{humidity, sensorValue});
 //                  Stream sampling
-//                    if (streamSampler.isAddable(counter)) {
-                        dataPublisher.tryPublish(event);
-                        filteredEvents++;
-//                    }
+//                    if (streamSampler.isAddable(humidity)) {
+                    if (dataPublisher.tryPublish(event)) {
+//                        dropped = true;
+//                        droppedAt = counter;
+//                        filteredEvents++;
+                    } else {
+                        System.out.println("dropped : " + counter);
+                        totalDropped++;
+                    }
+
+                    System.out.println("QUEUE Filled : " + (dataPublisher.getQueueFilledPercentage() * 100) + "%");
 
                     if ((counter > warmUpCount) && ((counter + 1) % elapsedCount == 0)) {
 
@@ -131,8 +143,15 @@ public class Client {
                 }
 
                 System.out.println("EVENT SENDING FINISHED.................");
+                System.out.println("UNCONTROLLED DROPPED : " + totalDropped);
                 System.out.println("TOTAL NO OF EVENTS : " + eventCount);
                 System.out.println("FILTERED NO OF EVENTS : " + filteredEvents);
+
+                for (int i : streamSampler.getCounts()) {
+                    System.out.print(i + ", ");
+                }
+                System.out.println();
+                System.out.println("TotCount : " + streamSampler.getTotalCount());
 
                 try {
                     dataPublisher.shutdownWithAgent();
@@ -140,7 +159,7 @@ public class Client {
                     log.error(e);
                 }
 
-        }
+            }
         }).start();
     }
 

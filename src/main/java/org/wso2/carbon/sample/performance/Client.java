@@ -34,7 +34,7 @@ import java.util.Random;
 import java.util.concurrent.BlockingDeque;
 
 public class Client {
-    static StreamSampler streamSampler = new StreamSampler(0.7);
+    static StreamSampler streamSampler = new StreamSampler(0.9);
 
     private static Log log = LogFactory.getLog(Client.class);
 
@@ -90,6 +90,11 @@ public class Client {
             public void run() {
                 boolean dropped = false;
                 long totalDropped = 0;
+                long controlledDropped = 0;
+                long uncontrolledDropped = 0;
+
+                double accuracy;
+                double queueFillage;
 
                 long counter = 0;
                 Random randomGenerator = new Random(1233435);
@@ -110,17 +115,33 @@ public class Client {
                             new Object[]{longitude, latitude},
                             new Object[]{humidity, sensorValue});
 //                  Stream sampling
-//                    if (streamSampler.isAddable(humidity)) {
-                    if (dataPublisher.tryPublish(event)) {
-//                        dropped = true;
-//                        droppedAt = counter;
-//                        filteredEvents++;
+                    queueFillage = dataPublisher.getQueueFilledPercentage();
+//                    System.out.println("queueFillage : " + queueFillage);
+                    if (queueFillage > 0.6) {
+                        accuracy = Math.floor((1.5 - (Math.floor(queueFillage * 10) / 10.0)) * 1000) / 1000.0;
+//                        System.out.print("Accuracy : " + accuracy);
+                        streamSampler.setAccuracy(accuracy);
+                        if (streamSampler.isAddable(counter)) {
+                            filteredEvents++;
+                            if (!dataPublisher.tryPublish(event)) {
+                                System.out.println("uncontrolled dropped : " + counter);
+                                uncontrolledDropped++;
+                                totalDropped++;
+                            }
+                        } else {
+                            System.out.println("controlled dropped : " + counter);
+                            controlledDropped++;
+                            totalDropped++;
+                        }
                     } else {
-                        System.out.println("dropped : " + counter);
-                        totalDropped++;
+                        if (!dataPublisher.tryPublish(event)) {
+                                System.out.println("uncontrolled dropped : " + counter);
+                                uncontrolledDropped++;
+                                totalDropped++;
+                        }
                     }
 
-                    System.out.println("QUEUE Filled : " + (dataPublisher.getQueueFilledPercentage() * 100) + "%");
+//                    System.out.println("QUEUE Filled : " + (dataPublisher.getQueueFilledPercentage() * 100) + "%");
 
                     if ((counter > warmUpCount) && ((counter + 1) % elapsedCount == 0)) {
 
@@ -143,14 +164,16 @@ public class Client {
                 }
 
                 System.out.println("EVENT SENDING FINISHED.................");
-                System.out.println("UNCONTROLLED DROPPED : " + totalDropped);
+                System.out.println("UNCONTROLLED DROPPED : " + uncontrolledDropped);
+                System.out.println("CONTROLLED DROPPED : " + controlledDropped);
+                System.out.println("TOTAL DROPPED : " + totalDropped);
                 System.out.println("TOTAL NO OF EVENTS : " + eventCount);
                 System.out.println("FILTERED NO OF EVENTS : " + filteredEvents);
 
-                for (int i : streamSampler.getCounts()) {
-                    System.out.print(i + ", ");
-                }
-                System.out.println();
+//                for (int i : streamSampler.getCounts()) {
+//                    System.out.print(i + ", ");
+//                }
+//                System.out.println();
                 System.out.println("TotCount : " + streamSampler.getTotalCount());
 
                 try {

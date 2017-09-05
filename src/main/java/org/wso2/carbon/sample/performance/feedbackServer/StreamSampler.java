@@ -61,8 +61,15 @@ public class StreamSampler<T> {
     }
 
     private void init(double accuracy) {
-        if (accuracy > 1 || accuracy < 0) {
-            throw new IllegalArgumentException("accuracy must be in the range of (0,1)");
+        setAccuracy(accuracy);
+        events = new ArrayList<T>();
+        totalCount = 0;
+        counts = new int[totalNoOfHashValues];
+    }
+
+    public void setAccuracy(double accuracy) {
+        if (accuracy >= 1 || accuracy <= 0) {
+            throw new IllegalArgumentException("accuracy must be in the range of [0,1]");
         }
         this.accuracy = accuracy;
 
@@ -77,12 +84,8 @@ public class StreamSampler<T> {
         }
         acceptedNoOfHashValues = (int) Math.ceil(accuracy * totalNoOfHashValues);
 
-        System.out.println("totalNoOfHashValues : " + totalNoOfHashValues);
-        System.out.println("acceptedNoOfHashValues : " + acceptedNoOfHashValues);
-        events = new ArrayList<T>();
-
-        totalCount = 0;
-        counts = new int[totalNoOfHashValues];
+//        System.out.println("totalNoOfHashValues : " + totalNoOfHashValues);
+//        System.out.println("acceptedNoOfHashValues : " + acceptedNoOfHashValues);
     }
 
     /**

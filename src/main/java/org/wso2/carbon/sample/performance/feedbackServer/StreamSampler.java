@@ -74,7 +74,7 @@ public class StreamSampler<T> {
         this.accuracy = accuracy;
 
         String accuracyStr = accuracy + "";
-        System.out.println(accuracyStr);
+//        System.out.println(accuracyStr);
         int decimalLength = (accuracyStr.split("\\.")[1]).length();
 
         int precisionOfAccuracy = (totalNoOfHashValues + "").length() - 1;

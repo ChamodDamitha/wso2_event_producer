@@ -23,9 +23,7 @@ import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.databridge.agent.AgentHolder;
 import org.wso2.carbon.databridge.agent.DataPublisher;
 import org.wso2.carbon.databridge.commons.Event;
-import org.wso2.carbon.sample.performance.feedbackServer.TCPServer;
-import org.wso2.carbon.sample.performance.feedbackServer.FeedbackProcessor;
-import org.wso2.carbon.sample.performance.feedbackServer.StreamSampler;
+import org.wso2.carbon.sample.performance.feedbackServer.*;
 
 import java.awt.*;
 import java.text.DecimalFormat;
@@ -96,7 +94,7 @@ public class Client {
                 double accuracy;
                 double queueFillage;
 
-                long counter = 0;
+                int counter = 0;
                 Random randomGenerator = new Random(1233435);
                 String streamId = "org.wso2.event.sensor.stream:1.0.0";
                 long lastTime = System.currentTimeMillis();
@@ -104,7 +102,8 @@ public class Client {
                 int filteredEvents = 0;
                 while (counter < eventCount) {
                     boolean isPowerSaveEnabled = randomGenerator.nextBoolean();
-                    int sensorId = randomGenerator.nextInt();
+//                    int sensorId = randomGenerator.nextInt();
+                    int sensorId = counter;
                     double longitude = randomGenerator.nextDouble();
                     double latitude = randomGenerator.nextDouble();
                     float humidity = randomGenerator.nextFloat();
@@ -114,35 +113,49 @@ public class Client {
                                     "temperature-" + counter},
                             new Object[]{longitude, latitude},
                             new Object[]{humidity, sensorValue});
+//
+//                    Event event = new Event(streamId, System.currentTimeMillis(),
+//                            new Object[]{System.currentTimeMillis(), false, 0, ""},
+//                            new Object[]{0.0, 0.0},
+//                            new Object[]{humidity, 0.0});
+
+
+//                    Event event = new Event(streamId, System.currentTimeMillis(),
+//                            new Object[]{System.currentTimeMillis()},
+//                            new Object[]{},
+//                            new Object[]{humidity});
+
+
 //                  Stream sampling
                     queueFillage = dataPublisher.getQueueFilledPercentage();
 //                    System.out.println("queueFillage : " + queueFillage);
-                    if (queueFillage > 0.6) {
-                        accuracy = Math.floor((1.5 - (Math.floor(queueFillage * 10) / 10.0)) * 1000) / 1000.0;
-//                        System.out.print("Accuracy : " + accuracy);
+                    if (queueFillage > 0.5) {
+                        accuracy = Math.floor((1.4 - (Math.floor(queueFillage * 10) / 10.0)) * 1000) / 1000.0;
+//                        System.out.println("Accuracy : " + accuracy);
                         streamSampler.setAccuracy(accuracy);
                         if (streamSampler.isAddable(counter)) {
                             filteredEvents++;
-                            if (!dataPublisher.tryPublish(event)) {
-                                System.out.println("uncontrolled dropped : " + counter);
-                                uncontrolledDropped++;
-                                totalDropped++;
-                            }
+                    if (!dataPublisher.tryPublish(event)) {
+//                                System.out.println("uncontrolled dropped : " + counter);
+                        uncontrolledDropped++;
+                        totalDropped++;
+                    }
                         } else {
-                            System.out.println("controlled dropped : " + counter);
+//                            System.out.println("controlled dropped : " + counter);
                             controlledDropped++;
                             totalDropped++;
                         }
                     } else {
+//                        System.out.println("Accuracy : " + 1);
                         if (!dataPublisher.tryPublish(event)) {
-                                System.out.println("uncontrolled dropped : " + counter);
+//                                System.out.println("uncontrolled dropped : " + counter);
                                 uncontrolledDropped++;
                                 totalDropped++;
                         }
                     }
 
 //                    System.out.println("QUEUE Filled : " + (dataPublisher.getQueueFilledPercentage() * 100) + "%");
-
+//                    System.out.println("warmUpCount : " + warmUpCount); // TODO : testing
                     if ((counter > warmUpCount) && ((counter + 1) % elapsedCount == 0)) {
 
                         long currentTime = System.currentTimeMillis();
@@ -156,8 +169,14 @@ public class Client {
 
                     FeedbackProcessor.getInstance().incrementTotalEvents();
                     counter++;
+
+//                  send punctuation
+                    if (counter % 100 == 0) {
+                        new TCPClient(Constants.TCP_HOST, Constants.TCP_PORT).sendMsg("punctuation : -1");
+                    }
+
                     try {
-                        Thread.sleep(1);
+                        Thread.sleep(10);
                     } catch (InterruptedException e) {
 
                     }
@@ -174,7 +193,7 @@ public class Client {
 //                    System.out.print(i + ", ");
 //                }
 //                System.out.println();
-                System.out.println("TotCount : " + streamSampler.getTotalCount());
+//                System.out.println("TotCount : " + streamSampler.getTotalCount());
 
                 try {
                     dataPublisher.shutdownWithAgent();

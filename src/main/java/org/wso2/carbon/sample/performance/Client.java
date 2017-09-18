@@ -106,24 +106,14 @@ public class Client {
                     int sensorId = counter;
                     double longitude = randomGenerator.nextDouble();
                     double latitude = randomGenerator.nextDouble();
-                    float humidity = randomGenerator.nextFloat();
+                    int humidity = randomGenerator.nextInt(400000) + 0;
+//                    System.out.println("count : " + counter + " , humidity : " + humidity);
                     double sensorValue = randomGenerator.nextDouble();
                     Event event = new Event(streamId, System.currentTimeMillis(),
                             new Object[]{System.currentTimeMillis(), isPowerSaveEnabled, sensorId,
                                     "temperature-" + counter},
                             new Object[]{longitude, latitude},
                             new Object[]{humidity, sensorValue});
-//
-//                    Event event = new Event(streamId, System.currentTimeMillis(),
-//                            new Object[]{System.currentTimeMillis(), false, 0, ""},
-//                            new Object[]{0.0, 0.0},
-//                            new Object[]{humidity, 0.0});
-
-
-//                    Event event = new Event(streamId, System.currentTimeMillis(),
-//                            new Object[]{System.currentTimeMillis()},
-//                            new Object[]{},
-//                            new Object[]{humidity});
 
 
 //                  Stream sampling
@@ -171,12 +161,23 @@ public class Client {
                     counter++;
 
 //                  send punctuation
-                    if (counter % 100 == 0) {
+                    if (counter % 1000 == 0) {
                         new TCPClient(Constants.TCP_HOST, Constants.TCP_PORT).sendMsg("punctuation : -1");
+                    }
+//                  send special event : sensorId = -1
+                    if (counter % 500 == 0) {
+                        Event specialEvent = new Event(streamId, System.currentTimeMillis(),
+                                new Object[]{System.currentTimeMillis(), isPowerSaveEnabled, -1,
+                                        "temperature-" + counter},
+                                new Object[]{longitude, latitude},
+                                new Object[]{humidity, sensorValue});
+                        if (dataPublisher.tryPublish(specialEvent)) {
+                                System.out.println("special event sent");
+                        }
                     }
 
                     try {
-                        Thread.sleep(10);
+                        Thread.sleep(1);
                     } catch (InterruptedException e) {
 
                     }

@@ -86,7 +86,7 @@ public class Client {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                boolean dropped = false;
+                boolean eventDropped = false;
                 long totalDropped = 0;
                 long controlledDropped = 0;
                 long uncontrolledDropped = 0;
@@ -109,40 +109,45 @@ public class Client {
                     int humidity = randomGenerator.nextInt(400000) + 0;
 //                    System.out.println("count : " + counter + " , humidity : " + humidity);
                     double sensorValue = randomGenerator.nextDouble();
+                    long eventTimestamp = System.currentTimeMillis();
+
                     Event event = new Event(streamId, System.currentTimeMillis(),
-                            new Object[]{System.currentTimeMillis(), isPowerSaveEnabled, sensorId,
+                            new Object[]{eventTimestamp, isPowerSaveEnabled, sensorId,
                                     "temperature-" + counter},
                             new Object[]{longitude, latitude},
                             new Object[]{humidity, sensorValue});
 
 
 //                  Stream sampling
-                    queueFillage = dataPublisher.getQueueFilledPercentage();
-//                    System.out.println("queueFillage : " + queueFillage);
-                    if (queueFillage > 0.5) {
-                        accuracy = Math.floor((1.4 - (Math.floor(queueFillage * 10) / 10.0)) * 1000) / 1000.0;
-//                        System.out.println("Accuracy : " + accuracy);
-                        streamSampler.setAccuracy(accuracy);
-                        if (streamSampler.isAddable(counter)) {
-                            filteredEvents++;
+//                    queueFillage = dataPublisher.getQueueFilledPercentage();
+////                    System.out.println("queueFillage : " + queueFillage);
+//                    if (queueFillage > 0.5) {
+//                        accuracy = Math.floor((1.4 - (Math.floor(queueFillage * 10) / 10.0)) * 1000) / 1000.0;
+////                        System.out.println("Accuracy : " + accuracy);
+//                        streamSampler.setAccuracy(accuracy);
+//                        if (streamSampler.isAddable(counter)) {
+//                            filteredEvents++;
+//                            if (!dataPublisher.tryPublish(event)) {
+////                                System.out.println("uncontrolled dropped : " + counter);
+//                                uncontrolledDropped++;
+//                                totalDropped++;
+//                                eventDropped = true;
+//                            }
+//                        } else {
+////                            System.out.println("controlled dropped : " + counter);
+//                            controlledDropped++;
+//                            totalDropped++;
+//                            eventDropped = true;
+//                        }
+//                    } else {
+//                        System.out.println("Accuracy : " + 1);
                     if (!dataPublisher.tryPublish(event)) {
-//                                System.out.println("uncontrolled dropped : " + counter);
+                                System.out.println("uncontrolled dropped : " + counter);
                         uncontrolledDropped++;
                         totalDropped++;
+                        eventDropped = true;
                     }
-                        } else {
-//                            System.out.println("controlled dropped : " + counter);
-                            controlledDropped++;
-                            totalDropped++;
-                        }
-                    } else {
-//                        System.out.println("Accuracy : " + 1);
-                        if (!dataPublisher.tryPublish(event)) {
-//                                System.out.println("uncontrolled dropped : " + counter);
-                                uncontrolledDropped++;
-                                totalDropped++;
-                        }
-                    }
+//                    }
 
 //                    System.out.println("QUEUE Filled : " + (dataPublisher.getQueueFilledPercentage() * 100) + "%");
 //                    System.out.println("warmUpCount : " + warmUpCount); // TODO : testing
@@ -161,26 +166,30 @@ public class Client {
                     counter++;
 
 //                  send punctuation
-                    if (counter % 1000 == 0) {
-                        new TCPClient(Constants.TCP_HOST, Constants.TCP_PORT).sendMsg("punctuation : -1");
+//                    if (eventDropped && counter > 0 && counter % 1000 == 0) {
+                    if (counter > 0 && counter % 450 == 0) {
+                        eventDropped = false;
+                        new TCPClient(Constants.TCP_HOST, Constants.TCP_PORT).sendMsg("punctuation : -1, timestamp : "
+                                + eventTimestamp);
                     }
-//                  send special event : sensorId = -1
-                    if (counter % 500 == 0) {
-                        Event specialEvent = new Event(streamId, System.currentTimeMillis(),
-                                new Object[]{System.currentTimeMillis(), isPowerSaveEnabled, -1,
-                                        "temperature-" + counter},
-                                new Object[]{longitude, latitude},
-                                new Object[]{humidity, sensorValue});
-                        if (dataPublisher.tryPublish(specialEvent)) {
-                                System.out.println("special event sent");
-                        }
-                    }
-
+//
+////                  send special event : sensorId = -1
+//                    if (counter % 500 == 0) {
+//                        Event specialEvent = new Event(streamId, System.currentTimeMillis(),
+//                                new Object[]{System.currentTimeMillis(), isPowerSaveEnabled, -1,
+//                                        "temperature-" + counter},
+//                                new Object[]{longitude, latitude},
+//                                new Object[]{humidity, sensorValue});
+//                        if (dataPublisher.tryPublish(specialEvent)) {
+//                            System.out.println("special event sent");
+//                        }
+//                    }
                     try {
                         Thread.sleep(1);
                     } catch (InterruptedException e) {
 
                     }
+
                 }
 
                 System.out.println("EVENT SENDING FINISHED.................");

@@ -29,7 +29,6 @@ import java.awt.*;
 import java.text.DecimalFormat;
 import java.util.Arrays;
 import java.util.Random;
-import java.util.concurrent.BlockingDeque;
 
 public class Client {
     static StreamSampler streamSampler = new StreamSampler(0.9);
@@ -86,28 +85,27 @@ public class Client {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                boolean eventDropped = false;
+                boolean droppedBatch = false;
+                int droppedInwindow = 0;
                 long totalDropped = 0;
                 long controlledDropped = 0;
                 long uncontrolledDropped = 0;
-
-                double accuracy;
                 double queueFillage;
+
 
                 int counter = 0;
                 Random randomGenerator = new Random(1233435);
                 String streamId = "org.wso2.event.sensor.stream:1.0.0";
                 long lastTime = System.currentTimeMillis();
                 DecimalFormat decimalFormat = new DecimalFormat("#");
-                int filteredEvents = 0;
+
                 while (counter < eventCount) {
                     boolean isPowerSaveEnabled = randomGenerator.nextBoolean();
 //                    int sensorId = randomGenerator.nextInt();
                     int sensorId = counter;
                     double longitude = randomGenerator.nextDouble();
                     double latitude = randomGenerator.nextDouble();
-                    int humidity = randomGenerator.nextInt(400000) + 0;
-//                    System.out.println("count : " + counter + " , humidity : " + humidity);
+                    int humidity = randomGenerator.nextInt(10000) + 0;
                     double sensorValue = randomGenerator.nextDouble();
                     long eventTimestamp = System.currentTimeMillis();
 
@@ -119,38 +117,30 @@ public class Client {
 
 
 //                  Stream sampling
-//                    queueFillage = dataPublisher.getQueueFilledPercentage();
-////                    System.out.println("queueFillage : " + queueFillage);
-//                    if (queueFillage > 0.5) {
-//                        accuracy = Math.floor((1.4 - (Math.floor(queueFillage * 10) / 10.0)) * 1000) / 1000.0;
-////                        System.out.println("Accuracy : " + accuracy);
-//                        streamSampler.setAccuracy(accuracy);
-//                        if (streamSampler.isAddable(counter)) {
-//                            filteredEvents++;
-//                            if (!dataPublisher.tryPublish(event)) {
-////                                System.out.println("uncontrolled dropped : " + counter);
-//                                uncontrolledDropped++;
-//                                totalDropped++;
-//                                eventDropped = true;
-//                            }
-//                        } else {
-////                            System.out.println("controlled dropped : " + counter);
-//                            controlledDropped++;
-//                            totalDropped++;
-//                            eventDropped = true;
-//                        }
-//                    } else {
-//                        System.out.println("Accuracy : " + 1);
-                    if (!dataPublisher.tryPublish(event)) {
-                                System.out.println("uncontrolled dropped : " + counter);
-                        uncontrolledDropped++;
-                        totalDropped++;
-                        eventDropped = true;
+                    queueFillage = dataPublisher.getQueueFilledPercentage();
+//                  max operation
+                    boolean resetMax = false;
+                    if ((counter + 1) % 1000 == 0) {
+                        resetMax = true;
                     }
-//                    }
+                    streamSampler.setFilterRate(ApproxStabilizer.approxMax(humidity, queueFillage, resetMax));
 
-//                    System.out.println("QUEUE Filled : " + (dataPublisher.getQueueFilledPercentage() * 100) + "%");
-//                    System.out.println("warmUpCount : " + warmUpCount); // TODO : testing
+//                  fair sampling
+//                    streamSampler.setFilterRate(ApproxStabilizer.approxFairSample(queueFillage,droppedBatch));
+                    droppedBatch = false;
+
+                    if (streamSampler.isAddable(counter)) {
+                        if (!dataPublisher.tryPublish(event)) {
+                            uncontrolledDropped++;
+                            totalDropped++;
+                            droppedInwindow++;
+                        }
+                    } else {
+                        controlledDropped++;
+                        totalDropped++;
+                        droppedInwindow++;
+                    }
+
                     if ((counter > warmUpCount) && ((counter + 1) % elapsedCount == 0)) {
 
                         long currentTime = System.currentTimeMillis();
@@ -166,30 +156,34 @@ public class Client {
                     counter++;
 
 //                  send punctuation
-//                    if (eventDropped && counter > 0 && counter % 1000 == 0) {
-                    if (counter > 0 && counter % 450 == 0) {
-                        eventDropped = false;
-                        new TCPClient(Constants.TCP_HOST, Constants.TCP_PORT).sendMsg("punctuation : -1, timestamp : "
-                                + eventTimestamp);
+                    if (counter % 1000 == 0) {
+                        System.out.println("dropped in window : " + droppedInwindow);//TODO
+                        new TCPClient(Constants.TCP_HOST, Constants.TCP_PORT).sendMsg("punctuation : "
+                                + (1000 - droppedInwindow) + ", counter : " + counter);
+                        if (droppedInwindow == 1000) {
+                            droppedBatch = true;
+                        }
+                        droppedInwindow = 0;
                     }
 //
-////                  send special event : sensorId = -1
-//                    if (counter % 500 == 0) {
-//                        Event specialEvent = new Event(streamId, System.currentTimeMillis(),
-//                                new Object[]{System.currentTimeMillis(), isPowerSaveEnabled, -1,
-//                                        "temperature-" + counter},
-//                                new Object[]{longitude, latitude},
-//                                new Object[]{humidity, sensorValue});
-//                        if (dataPublisher.tryPublish(specialEvent)) {
-//                            System.out.println("special event sent");
-//                        }
-//                    }
-                    try {
-                        Thread.sleep(1);
-                    } catch (InterruptedException e) {
-
+//                  send special event : sensorId = -1
+                    if (counter % 500 == 0) {
+                        Event specialEvent = new Event(streamId, System.currentTimeMillis(),
+                                new Object[]{System.currentTimeMillis(), isPowerSaveEnabled, -1,
+                                        "temperature-" + counter},
+                                new Object[]{longitude, latitude},
+                                new Object[]{humidity, sensorValue});
+                        dataPublisher.tryPublish(specialEvent);
                     }
 
+//                  TPS control
+                    if (counter % 3 == 0) {
+                        try {
+                            Thread.sleep(1);
+                        } catch (InterruptedException e) {
+
+                        }
+                    }
                 }
 
                 System.out.println("EVENT SENDING FINISHED.................");
@@ -197,13 +191,7 @@ public class Client {
                 System.out.println("CONTROLLED DROPPED : " + controlledDropped);
                 System.out.println("TOTAL DROPPED : " + totalDropped);
                 System.out.println("TOTAL NO OF EVENTS : " + eventCount);
-                System.out.println("FILTERED NO OF EVENTS : " + filteredEvents);
 
-//                for (int i : streamSampler.getCounts()) {
-//                    System.out.print(i + ", ");
-//                }
-//                System.out.println();
-//                System.out.println("TotCount : " + streamSampler.getTotalCount());
 
                 try {
                     dataPublisher.shutdownWithAgent();

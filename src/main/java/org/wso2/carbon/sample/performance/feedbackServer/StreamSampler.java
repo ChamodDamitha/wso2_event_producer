@@ -19,14 +19,17 @@ package org.wso2.carbon.sample.performance.feedbackServer;/*
 import java.util.ArrayList;
 
 /**
- * Used to sample a set of data depending on a specified accuracy
+ * Used to sample a set of data depending on a specified allowedPercentage
  *
  * @param <T>
  */
 public class StreamSampler<T> {
+    private boolean neglectAll = false;
+    private boolean passAll = false;
+
     private int totalNoOfHashValues = 1000;
     private int acceptedNoOfHashValues;
-    private double accuracy;
+    private double allowedPercentage;
 
     private ArrayList<T> events;
 
@@ -35,57 +38,36 @@ public class StreamSampler<T> {
 
 
     /**
-     * Based on a specified accuracy and a precision of accuracy, an StreamSampler object is created
+     * Based on a specified allowedPercentage and a precision of allowedPercentage, an StreamSampler object is created
      *
-     * @param accuracy            is a double value in the range [0,1]
+     * @param allowedPercentage   is a double value in the range [0,1]
      * @param precisionOfAccuracy is a integer value specifying the number of decimal
-     *                            places of the accuracy(precision) to be considered
+     *                            places of the allowedPercentage(precision) to be considered
      */
-    public StreamSampler(double accuracy, int precisionOfAccuracy) {
+    public StreamSampler(double allowedPercentage, int precisionOfAccuracy) {
         int temp = 1;
         for (int i = 0; i < precisionOfAccuracy; i++) {
             temp *= 10;
         }
         this.totalNoOfHashValues = temp;
-        init(accuracy);
+        init(allowedPercentage);
     }
 
     /**
-     * Based on a specified accuracy, an StreamSampler object is created.
-     * The default precision of the accuracy is taken for 3 decimal places.
+     * Based on a specified allowedPercentage, an StreamSampler object is created.
+     * The default precision of the allowedPercentage is taken for 3 decimal places.
      *
-     * @param accuracy is a double value in the range [0,1]
+     * @param allowedPercentage is a double value in the range [0,1]
      */
-    public StreamSampler(double accuracy) {
-        init(accuracy);
+    public StreamSampler(double allowedPercentage) {
+        init(allowedPercentage);
     }
 
     private void init(double accuracy) {
-        setAccuracy(accuracy);
+        setFilterRate(accuracy);
         events = new ArrayList<T>();
         totalCount = 0;
         counts = new int[totalNoOfHashValues];
-    }
-
-    public void setAccuracy(double accuracy) {
-        if (accuracy >= 1 || accuracy <= 0) {
-            throw new IllegalArgumentException("accuracy must be in the range of [0,1]");
-        }
-        this.accuracy = accuracy;
-
-        String accuracyStr = accuracy + "";
-//        System.out.println(accuracyStr);
-        int decimalLength = (accuracyStr.split("\\.")[1]).length();
-
-        int precisionOfAccuracy = (totalNoOfHashValues + "").length() - 1;
-        if (decimalLength > precisionOfAccuracy) {
-            throw new IllegalArgumentException("precision of accuracy must be at most for "
-                    + precisionOfAccuracy + " decimal places");
-        }
-        acceptedNoOfHashValues = (int) Math.ceil(accuracy * totalNoOfHashValues);
-
-//        System.out.println("totalNoOfHashValues : " + totalNoOfHashValues);
-//        System.out.println("acceptedNoOfHashValues : " + acceptedNoOfHashValues);
     }
 
     /**
@@ -109,14 +91,20 @@ public class StreamSampler<T> {
      * @return {@code true} if the object is included in the samples, {@code false} if the object is dropped from samples.
      */
     public boolean isAddable(T t) {
-        int hash = getHashValue(t);
-        counts[hash]++;
-        totalCount++;
-
-        if (hash <= acceptedNoOfHashValues) {
+        if (neglectAll) {
+            return false;
+        } else if (passAll) {
             return true;
+        } else {
+            int hash = getHashValue(t);
+            counts[hash]++;
+            totalCount++;
+
+            if (hash <= acceptedNoOfHashValues) {
+                return true;
+            }
+            return false;
         }
-        return false;
     }
 
     private int getHashValue(T t) {
@@ -124,8 +112,36 @@ public class StreamSampler<T> {
         return hash % totalNoOfHashValues;
     }
 
-    public double getAccuracy() {
-        return accuracy;
+    public double getAllowedPercentage() {
+        return allowedPercentage;
+    }
+
+    public void setFilterRate(double allowedPercentage) {
+        if (allowedPercentage > 1 || allowedPercentage < 0) {
+            throw new IllegalArgumentException("allowedPercentage must be in the range of [0,1], bu given " + allowedPercentage);
+        }
+        this.allowedPercentage = allowedPercentage;
+
+        if (Math.abs(allowedPercentage - 0) < 0.0001) {
+            neglectAll = true;
+        } else if (Math.abs(allowedPercentage - 1) < 0.0001) {
+            passAll = true;
+        } else {
+            neglectAll = false;
+            passAll = false;
+            String accuracyStr = allowedPercentage + "";
+//        System.out.println(accuracyStr);
+            int decimalLength = (accuracyStr.split("\\.")[1]).length();
+
+            int precisionOfAccuracy = (totalNoOfHashValues + "").length() - 1;
+            if (decimalLength > precisionOfAccuracy) {
+                throw new IllegalArgumentException("precision of allowedPercentage must be at most for "
+                        + precisionOfAccuracy + " decimal places, but given " + decimalLength);
+            }
+            acceptedNoOfHashValues = (int) Math.ceil(allowedPercentage * totalNoOfHashValues);
+        }
+//        System.out.println("totalNoOfHashValues : " + totalNoOfHashValues);
+//        System.out.println("acceptedNoOfHashValues : " + acceptedNoOfHashValues);
     }
 
     public ArrayList<T> getEvents() {

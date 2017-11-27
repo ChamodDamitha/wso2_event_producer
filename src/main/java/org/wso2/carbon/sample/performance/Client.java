@@ -23,17 +23,23 @@ import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.databridge.agent.AgentHolder;
 import org.wso2.carbon.databridge.agent.DataPublisher;
 import org.wso2.carbon.databridge.commons.Event;
-import org.wso2.carbon.sample.performance.feedbackServer.*;
+import org.wso2.carbon.sample.performance.ApproxStabilizer.*;
 
 import java.awt.*;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
 import java.text.DecimalFormat;
 import java.util.Arrays;
 import java.util.Random;
 
 public class Client {
-    static StreamSampler streamSampler = new StreamSampler(0.9);
+    static StreamSampler streamSampler = new StreamSampler(1);
 
     private static Log log = LogFactory.getLog(Client.class);
+    private static String sCurrentLine = null;
+    private static BufferedReader br = null;
+    private static FileReader fr = null;
 
     public static void main(String[] args) {
 //      Run the feedback sever
@@ -76,7 +82,8 @@ public class Client {
         } catch (Throwable e) {
             log.error(e);
         }
-
+//       initialize file read
+        initFileRead(ClassLoader.getSystemResource("dataset2.csv").getPath());
     }
 
     private static void publishEvents(DataPublisher dataPublisher, long eventCount, long elapsedCount,
@@ -86,12 +93,13 @@ public class Client {
             @Override
             public void run() {
                 boolean droppedBatch = false;
-                int droppedInwindow = 0;
+                int droppedInWindow = 0;
                 long totalDropped = 0;
                 long controlledDropped = 0;
                 long uncontrolledDropped = 0;
-                double queueFillage;
+                double queueFilledPercentage;
 
+                final long outOfOrderThresholdInterval = 0L;
 
                 int counter = 0;
                 Random randomGenerator = new Random(1233435);
@@ -99,15 +107,30 @@ public class Client {
                 long lastTime = System.currentTimeMillis();
                 DecimalFormat decimalFormat = new DecimalFormat("#");
 
+
+                CounterGenerator counterGenerator = new CounterGenerator(100000, 10);
+                long startTime = 0;
+                int newCounter = 0;
                 while (counter < eventCount) {
+
+//                  file read event
+//                    Object[] eventObj = getNextEventFromFile();
+//                    if (eventObj == null) {
+//                        break;
+//                    }
+
                     boolean isPowerSaveEnabled = randomGenerator.nextBoolean();
-//                    int sensorId = randomGenerator.nextInt();
                     int sensorId = counter;
+//                    int sensorId = (int) eventObj[0];
                     double longitude = randomGenerator.nextDouble();
                     double latitude = randomGenerator.nextDouble();
-                    int humidity = randomGenerator.nextInt(10000) + 0;
+                    int humidity = randomGenerator.nextInt(1000000);
+//                    int humidity = counterGenerator.getNextCounter();
+//                    int humidity = counter % 10;
                     double sensorValue = randomGenerator.nextDouble();
                     long eventTimestamp = System.currentTimeMillis();
+//                    long eventTimestamp = (long) eventObj[1];
+
 
                     Event event = new Event(streamId, System.currentTimeMillis(),
                             new Object[]{eventTimestamp, isPowerSaveEnabled, sensorId,
@@ -115,32 +138,48 @@ public class Client {
                             new Object[]{longitude, latitude},
                             new Object[]{humidity, sensorValue});
 
+                    if (counter == 0) {
+                        startTime = System.currentTimeMillis();
+                        newCounter = 0;
+                    }
 
 //                  Stream sampling
-                    queueFillage = dataPublisher.getQueueFilledPercentage();
+                    queueFilledPercentage = dataPublisher.getQueueFilledPercentage();
 //                  max operation
-                    boolean resetMax = false;
-                    if ((counter + 1) % 1000 == 0) {
-                        resetMax = true;
-                    }
-                    streamSampler.setFilterRate(ApproxStabilizer.approxMax(humidity, queueFillage, resetMax));
+//                    boolean resetMax = false;
+//                    if ((counter + 1) % 1000 == 0) {
+//                        resetMax = true;
+//                    }
+//                    streamSampler.setFilterRate(ApproxStabilizer.approxMax(humidity, queueFilledPercentage, resetMax));
 
 //                  fair sampling
-//                    streamSampler.setFilterRate(ApproxStabilizer.approxFairSample(queueFillage,droppedBatch));
-                    droppedBatch = false;
+//                    streamSampler.setFilterRate(ApproxStabilizer.approxFairSample(queueFilledPercentage, droppedBatch));
 
+                    //                  out of order sampling
+//                    streamSampler.setFilterRate(ApproxStabilizer.approxOutOfOrder(queueFilledPercentage, eventTimestamp));
+//                    droppedBatch = false;
+
+
+//                  Impact based dropping
+//                    if (counter > 1000) {
+//                        streamSampler.setFilterRate(ApproxStabilizer.approxImpactModel(queueFilledPercentage, humidity));
+//                    }
+//                  distinct event filter
+//                    streamSampler.setFilterRate(ApproxStabilizer.approxDistinctEvents(queueFilledPercentage, humidity));
+
+//                  feedback event filter
+//                    streamSampler.setFilterRate(ApproxFeedbackStabilizer.approxFeedbackDrop(queueFilledPercentage, humidity));
                     if (streamSampler.isAddable(counter)) {
                         if (!dataPublisher.tryPublish(event)) {
                             uncontrolledDropped++;
                             totalDropped++;
-                            droppedInwindow++;
+                            droppedInWindow++;
                         }
                     } else {
                         controlledDropped++;
                         totalDropped++;
-                        droppedInwindow++;
+                        droppedInWindow++;
                     }
-
                     if ((counter > warmUpCount) && ((counter + 1) % elapsedCount == 0)) {
 
                         long currentTime = System.currentTimeMillis();
@@ -155,35 +194,40 @@ public class Client {
                     FeedbackProcessor.getInstance().incrementTotalEvents();
                     counter++;
 
+//                    if ((System.currentTimeMillis() - startTime) >= 1000) {
+//                        System.out.println("Time Passage : 1 s : Events sent : " + (counter - newCounter));
+//                        startTime = System.currentTimeMillis();
+//                        newCounter = counter;
+//                    }
 //                  send punctuation
-                    if (counter % 1000 == 0) {
-                        System.out.println("dropped in window : " + droppedInwindow);//TODO
+                    if (counter % Constants.EVENTS_IN_LENGTH_BATCH == 0) {
+                        System.out.println("dropped in window : " + droppedInWindow);//TODO
                         new TCPClient(Constants.TCP_HOST, Constants.TCP_PORT).sendMsg("punctuation : "
-                                + (1000 - droppedInwindow) + ", counter : " + counter);
-                        if (droppedInwindow == 1000) {
+                                + (Constants.EVENTS_IN_LENGTH_BATCH - droppedInWindow) + ", counter : " + counter);
+                        if (droppedInWindow == Constants.EVENTS_IN_LENGTH_BATCH) {
                             droppedBatch = true;
                         }
-                        droppedInwindow = 0;
+                        droppedInWindow = 0;
                     }
 //
 //                  send special event : sensorId = -1
-                    if (counter % 500 == 0) {
-                        Event specialEvent = new Event(streamId, System.currentTimeMillis(),
-                                new Object[]{System.currentTimeMillis(), isPowerSaveEnabled, -1,
-                                        "temperature-" + counter},
-                                new Object[]{longitude, latitude},
-                                new Object[]{humidity, sensorValue});
-                        dataPublisher.tryPublish(specialEvent);
-                    }
+//                    if (counter % 500 == 0) {
+//                        Event specialEvent = new Event(streamId, System.currentTimeMillis(),
+//                                new Object[]{System.currentTimeMillis(), isPowerSaveEnabled, -1,
+//                                        "temperature-" + counter},
+//                                new Object[]{longitude, latitude},
+//                                new Object[]{humidity, sensorValue});
+//                        dataPublisher.tryPublish(specialEvent);
+//                    }
 
 //                  TPS control
-                    if (counter % 3 == 0) {
+//                    if (counter % 1 == 0) {
                         try {
                             Thread.sleep(1);
                         } catch (InterruptedException e) {
 
                         }
-                    }
+//                    }
                 }
 
                 System.out.println("EVENT SENDING FINISHED.................");
@@ -258,6 +302,42 @@ public class Client {
             }
             counter++;
         }
+    }
+
+
+    //  file read for event generation
+    private static void initFileRead(String FILENAME) {
+        try {
+            fr = new FileReader(FILENAME);
+            br = new BufferedReader(fr);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static Object[] getNextEventFromFile() {
+        try {
+            if ((sCurrentLine = br.readLine()) != null) {
+                String[] strArr = sCurrentLine.trim().split(",");
+                return new Object[]{Integer.valueOf(strArr[0]), Long.valueOf(strArr[1])};
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            if (sCurrentLine == null) {
+                try {
+                    if (br != null) {
+                        br.close();
+                    }
+                    if (fr != null) {
+                        fr.close();
+                    }
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
+            }
+        }
+        return null;
     }
 
 }

@@ -4,4 +4,5 @@ temp/
 #idea files
 .idea/
 *.iml
+*.jfr
 

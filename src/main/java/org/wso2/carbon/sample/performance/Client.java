@@ -153,7 +153,7 @@ public class Client {
 //                    streamSampler.setFilterRate(ApproxStabilizer.approxMax(humidity, queueFilledPercentage, resetMax));
 
 //                  fair sampling
-//                    streamSampler.setFilterRate(ApproxStabilizer.approxFairSample(queueFilledPercentage, droppedBatch));
+                    streamSampler.setFilterRate(ApproxStabilizer.approxFairSample(queueFilledPercentage, droppedBatch));
 
                     //                  out of order sampling
 //                    streamSampler.setFilterRate(ApproxStabilizer.approxOutOfOrder(queueFilledPercentage, eventTimestamp));
